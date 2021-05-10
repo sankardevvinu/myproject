@@ -1,0 +1,53 @@
+def COLOR_MAP = ['SUCCESS': 'good', 'FAILURE': 'danger', 'UNSTABLE': 'danger', 'ABORTED': 'danger']
+
+pipeline {
+
+  agent {label 'jenkins-slave'}
+
+  options {
+    timestamps()
+  }
+
+  parameters {
+    string(
+      name: 'REPLICA_COUNT',
+      defaultValue: '2',
+      description: 'Desired pod replica count'
+    )
+  }
+
+  environment {
+    DOCKER_REPO = "381346469826.dkr.ecr.us-east-2.amazonaws.com/wmbx-www"
+    EKS_DIR = "infra/eks"
+    AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+    GIT_COMMIT_HASH_SHORT = sh(returnStdout: true, script: 'git rev-parse HEAD | cut -c1-7')
+  }
+
+  stages {
+
+    stage('Build UI docker image') {
+
+      steps {
+        script {
+            sh "make login"
+            sh "make build ENVIRONMENT=staging CODE_ENVIRONMENT=testing GIT_COMMIT_HASH_SHORT=${env.GIT_COMMIT_HASH_SHORT}"
+            sh "make push ENVIRONMENT=staging GIT_COMMIT_HASH_SHORT=${env.GIT_COMMIT_HASH_SHORT}"
+        }
+      }
+    }
+    stage('Deploy UI docker image') {
+    steps {
+      script {
+          sh "make replace ENVIRONMENT=staging NAMESPACE=mobie-non-prod-staging GIT_COMMIT_HASH_SHORT=${env.GIT_COMMIT_HASH_SHORT} REPLICA_COUNT=${params.REPLICA_COUNT}"
+          sh "cat infra/eks/wmbx-ui-staging.yml"
+          sh "aws eks --region us-east-2 update-kubeconfig --name mobie-non-prod"
+          sh "kubectl get pods -n mobie-non-prod-staging |grep www"
+          sh "kubectl apply -f infra/eks/wmbx-ui-staging.yml"
+          sh "sleep 5"
+          sh "kubectl get pods -n mobie-non-prod-staging |grep www"
+        }
+      }
+    }
+  }
+}
