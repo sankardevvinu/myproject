@@ -1,0 +1,41 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  namespace: %NAMESPACE%
+  name: wmbx-www
+  labels:
+    app: wmbx
+    component: ui
+spec:
+  replicas: %REPLICA_COUNT%
+  selector:
+    matchLabels:
+      app: wmbx
+      component: ui
+  template:
+    metadata:
+      labels:
+        app: wmbx
+        component: ui
+    spec:
+      containers:
+      - name: wmbx-www
+        image: 381346469826.dkr.ecr.us-east-2.amazonaws.com/wmbx-www:%ENVIRONMENT%-%GIT_COMMIT_HASH_SHORT%
+        imagePullPolicy: Always
+        ports:
+        - name: wmbx-www
+          containerPort: 80
+          protocol: TCP
+---
+
+kind: Service
+apiVersion: v1
+metadata:
+  namespace: %NAMESPACE%
+  name: wmbx-www-service
+spec:
+  selector:
+    component: ui
+  ports:
+    - port: 80 # Default port for image
+      protocol: TCP
